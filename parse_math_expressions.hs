@@ -1,4 +1,5 @@
 import System.IO
+import Text.Printf --для вывода с округлением
 
 -- Парсер математических выражений
 -- Распознает бинарные операторы (+, -, *, /) и скобки
@@ -70,7 +71,7 @@ operatorCheck :: Char -> [Char] -> [Char] -> ([Char], [Char])
 operatorCheck op [] strRPE = ((push [] op), strRPE)
 operatorCheck op stack strRPE = do
     if (((getPriority priorities (last stack)) > (getPriority priorities op)) && (length stack > 0) && (getPriority priorities op /= 0)) then do
-        operatorCheck op (init stack) (append (last stack) strRPE)
+        operatorCheck op (init stack) ((append (last stack) strRPE) ++ " ")
     else
         ((push stack op), strRPE)
 
@@ -87,10 +88,23 @@ ejection :: [Char] -> [Char] -> ([Char], [Char])
 ejection [] strRPE = ([], strRPE)
 ejection stack strRPE = 
     if (getPriority priorities (last stack) /= 0) then
-        ejection (init stack) (append (last stack) strRPE)
+        ejection (init stack) ((append (last stack) strRPE) ++ " ")
     else 
         ((init stack), strRPE)
 
+inTuple :: ([a], [a]) -> [a] -> ([a], [a], [a])
+inTuple x y = do
+    (b, c, y)
+      where 
+        b = fst x
+        c = snd x
+
+inTuple2 :: [Char] -> ([Char], [Char]) -> ([Char], [Char], [Char])
+inTuple2 x y = do
+    (x, c ++ " ", b)
+      where 
+        b = fst y
+        c = snd y
 
 -- перевод входящей строки в обратную польскую нотацию
 -- принимает исходную строку, стек (пустой) и конечную строку (пустой)
@@ -101,12 +115,13 @@ getReversePolishEntry [] stack strRPE = do
     snd $ ejection stack strRPE
 
 getReversePolishEntry (x:xs) stack strRPE = do
-    let (s, str) = if (isOperators x operators) then 
-                       operatorCheck x stack strRPE
-                   else if (isClosingParenthesis x) then
-                            ejection stack strRPE
-                        else (stack, append x strRPE)
-    getReversePolishEntry xs s str
+    let (s, str, ar) = if (isOperators x operators) then 
+                           inTuple (operatorCheck x stack strRPE) xs
+                       else if (isClosingParenthesis x) then
+                                inTuple (ejection stack strRPE) xs
+                            else do
+                                inTuple2 stack (checkNumber xs (append x strRPE))
+    getReversePolishEntry ar s str
 
 
 -- возвращяает результат применения оператора к операндам
@@ -121,20 +136,67 @@ getValue op stack =
         (y, z, s) = two_last_el stack
 
 
+-- Проверка совпадения количества скобок
+checkParentheses :: [Char] -> Int -> Bool
+checkParentheses [] i = if (i == 0) then False else True
+checkParentheses (x:xs) i = 
+    checkParentheses xs ind
+      where
+        ind = if (isClosingParenthesis x) then
+                i - 1
+            else
+                if (x == '(') then
+                    i + 1
+                else
+                    i
+
+
+--поиск чисел из несколькиз цыфр
+checkNumber :: [Char] -> [Char] -> ([Char], [Char])
+checkNumber [] strRPE = ([], strRPE)
+checkNumber (x:xs) strRPE = 
+    -- x уже проверено и это число
+    -- необходимо просмотреть строку дальше на предмет чисел
+    if ((not (isOperators x operators)) && (x /= '(') && (x /= ')') && (x /= ' ')) then do
+        checkNumber xs (append x strRPE)
+    else
+        if (x == ' ') then 
+            (xs, strRPE)
+        else
+            (([x] ++ xs), strRPE)
+
+--inTyple3 :: [a] -> [b] -> ([a], [b])
+--inTyple3 x y = (x, y)
+
 -- вычисление выражения в ОПН,
 -- используется строка в ОПН и стек из Double,
 -- возвращает Double
 calc :: [Char] -> [Double] -> Double
 calc [] stack = head stack
+--calc [] stack = (fromIntegral f / 100)
+--    where
+--        f = round ((head stack) * 100)
 calc (x:xs) stack = do
-    let s = if (isOperators x operators) then do
-                getValue x stack
-            else
-                push stack (read [x] :: Double)
-    calc xs s
+    let (s, ar) = if (isOperators x operators) then do
+                      ((getValue x stack), xs)
+                  else do
+                      if (x == ' ') then 
+                          (stack, xs)
+                      else
+                          ((push stack (read numb :: Double)), array) --Double
+                            where
+                              (array, numb) = checkNumber xs [x] --тут ошибка
+    calc ar s
 
 
 --main :: IO ()
 main = do
     input <- readFile "file.txt"
-    putStrLn $ show $ calc (getReversePolishEntry input "" "") []
+    if (checkParentheses input 0) then
+        putStrLn ("Некорректно расставлены скобки")
+    else do
+        let f = getReversePolishEntry input "" ""
+        --printf "%.2f\n" (calc f [])
+        putStrLn $ show $ calc f []
+          --where
+          --  f = getReversePolishEntry input "" ""
