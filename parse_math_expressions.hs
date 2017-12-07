@@ -1,13 +1,15 @@
 import System.IO
 import Text.Printf --для вывода с округлением
+import Data.Char (ord) --для создания белого списка символов
 
 -- Парсер математических выражений
 -- Распознает бинарные операторы (+, -, *, /) и скобки
 -- Выражение читается из файла "file.txt"
 -- Выражение должно быть записано в одну строку
+-- При неправильной расстановке скобок выводиться ошибка
+-- При наличии в выражении символов кроме чисел, точки, склбок и операторов +, -, *, / выводиться оибка
+-- При неправильной расстановке операторов (Например "2++1") выводиться ошибка 
 
--- функция считывания строки из файла
---hReadLine h = read <$> hGetLine h
 
 getStringFromFile :: IO String
 getStringFromFile = readFile "file.txt"
@@ -65,12 +67,12 @@ isClosingParenthesis x =
         False
 
 
--- выталкивает из стэка операторы с большим приоритетом, чем у текущего
+-- выталкивает из стэка операторы с большим либо таким же приоритетом, чем у текущего
 -- или записывает его в стэк
 operatorCheck :: Char -> [Char] -> [Char] -> ([Char], [Char])
 operatorCheck op [] strRPE = ((push [] op), strRPE)
 operatorCheck op stack strRPE = do
-    if (((getPriority priorities (last stack)) > (getPriority priorities op)) && (length stack > 0) && (getPriority priorities op /= 0)) then do
+    if (((getPriority priorities (last stack)) >= (getPriority priorities op)) && (length stack > 0) && (getPriority priorities op /= 0)) then do
         operatorCheck op (init stack) ((append (last stack) strRPE) ++ " ")
     else
         ((push stack op), strRPE)
@@ -136,19 +138,17 @@ getValue op stack =
         (y, z, s) = two_last_el stack
 
 
--- Проверка совпадения количества скобок
-checkParentheses :: [Char] -> Int -> Bool
-checkParentheses [] i = if (i == 0) then False else True
-checkParentheses (x:xs) i = 
-    checkParentheses xs ind
-      where
-        ind = if (isClosingParenthesis x) then
-                i - 1
-            else
-                if (x == '(') then
-                    i + 1
-                else
-                    i
+--проверка корректности расстановки операторов
+validation :: [Char] -> Int -> Bool
+validation [] n = if (n == 1) then True else False
+validation (x:xs) n = 
+    if ((i <= -1) || (i >= 2)) then False else validation inStr i
+    where 
+        (inStr, i) = if ((isOperators x operators) && (x /='(')) then (xs, n - 1)
+                     else if ((x /= '(') && (x /= ')')) then do
+                          let (inStr, munb) = checkNumber xs ""
+                          (inStr, n + 1)
+                     else (xs, n)
 
 
 --поиск чисел из несколькиз цыфр
@@ -164,9 +164,6 @@ checkNumber (x:xs) strRPE =
             (xs, strRPE)
         else
             (([x] ++ xs), strRPE)
-
---inTyple3 :: [a] -> [b] -> ([a], [b])
---inTyple3 x y = (x, y)
 
 -- вычисление выражения в ОПН,
 -- используется строка в ОПН и стек из Double,
@@ -185,15 +182,42 @@ calc (x:xs) stack = do
                       else
                           ((push stack (read numb :: Double)), array) --Double
                             where
-                              (array, numb) = checkNumber xs [x] --тут ошибка
+                              (array, numb) = checkNumber xs [x] 
     calc ar s
+
+
+-- проверка на корректность расстановки скобок
+checkSequenceParentheses :: [Char] -> Int -> Bool
+checkSequenceParentheses [] n = if (n == 0) then True else False
+checkSequenceParentheses (x:xs) n = 
+    if ((x == ')') && (n == 0)) then
+        False
+    else do
+        let b = if (x == '(') then n + 1
+                else if (x == ')') then n - 1
+                     else n
+        checkSequenceParentheses xs b
+
+--проверка на наличие букв и посторонних символов
+isNotLetter :: [Char] -> Bool
+isNotLetter [] = True
+isNotLetter (x:xs) =
+    --`elem` "qwertyuiopasdfghjklzxcvbnm[]{};',йцукенгшщзхъфывапролджэячсмитьбюQWERTYUIOPASDFGHJKLZXCVBNMЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ"
+    if (((((ord x) < 40) && ((ord x) > 43)) && ((ord x) < 45)) || ((ord x) > 57)) then
+        False
+    else 
+        isNotLetter xs
 
 
 --main :: IO ()
 main = do
     input <- readFile "file.txt"
-    if (checkParentheses input 0) then
+    if not (checkSequenceParentheses input 0) then
         putStrLn ("Некорректно расставлены скобки")
+    else if not (isNotLetter input) then
+        putStrLn ("Введен недопустимый символ")
+    else if not (validation input 0) then
+        putStrLn ("Некорректно расставлены знаки")
     else do
         let f = getReversePolishEntry input "" ""
         --printf "%.2f\n" (calc f [])
