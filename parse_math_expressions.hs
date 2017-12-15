@@ -79,8 +79,29 @@ operatorCheck op stack strRPE = do
 
 
 -- набор операторов и приоритетов
-operators = ['+', '-', '*', '/', '(']
-priorities = [('+', 1), ('-', 1), ('/', 2), ('*', 2), ('(', 0)]
+operators = ['+', '-', '*', '/', '(', '=']
+priorities = [('+', 1), ('-', 1), ('/', 2), ('*', 2), ('(', 0), ('=', -1)]
+variables = "qwertyuiopasdfghjklzxcvbnm"
+
+getValueX :: Char -> [Char] -> [Char]
+getValueX a [] = []
+getValueX a (x:xs) = if ((a == x) && (x `elem` variables) && ((head xs)) == '=' ) then 
+                         snd $ checkNumber (tail xs) ""
+                     else getValueX a xs
+
+--strDetachment :: [Char] -> ([Char], [Char])
+--strDetachment (x:xs) str1 str2 flag = break (== ';') inpyt
+
+--strWithValue строка с объявленными переменными
+--первый аргумент строка в ОПН
+substitution :: [Char] -> [Char] -> [Char] -> [Char]
+substitution [] _ res = res
+substitution (x:xs) strWithValue res = do
+    let r = if (x `elem` variables) then
+                res ++ (getValueX x strWithValue)
+            else 
+                res ++ [x]
+    substitution xs strWithValue r
 
 
 -- выталкивание операторов если встретилась закрывающая скобка
@@ -117,13 +138,16 @@ getReversePolishEntry [] stack strRPE = do
     snd $ ejection stack strRPE
 
 getReversePolishEntry (x:xs) stack strRPE = do
-    let (s, str, ar) = if (isOperators x operators) then 
-                           inTuple (operatorCheck x stack strRPE) xs
-                       else if (isClosingParenthesis x) then
-                                inTuple (ejection stack strRPE) xs
-                            else do
-                                inTuple2 stack (checkNumber xs (append x strRPE))
-    getReversePolishEntry ar s str
+    if (x == ';') then snd $ ejection stack strRPE
+    else do
+        let (s, str, ar) = if (isOperators x operators) then 
+                                inTuple (operatorCheck x stack strRPE) xs
+                           else if (isClosingParenthesis x) then
+                                    inTuple (ejection stack strRPE) xs
+                                else if (x `elem` variables) then 
+                                         (stack, (strRPE ++ [x, ' ']), xs)
+                                     else inTuple2 stack (checkNumber xs (append x strRPE))
+        getReversePolishEntry ar s str
 
 
 -- возвращяает результат применения оператора к операндам
@@ -144,8 +168,8 @@ validation [] n = if (n == 1) then True else False
 validation (x:xs) n = 
     if ((i <= -1) || (i >= 2)) then False else validation inStr i
     where 
-        (inStr, i) = if ((isOperators x operators) && (x /='(')) then (xs, n - 1)
-                     else if ((x /= '(') && (x /= ')')) then do
+        (inStr, i) = if (((isOperators x operators) || not (x `elem` "( ;")) || not (x `elem` variables)) then (xs, n - 1)
+                     else if (not (x `elem` "( ;") && not (x `elem` "( ;")) then do
                           let (inStr, munb) = checkNumber xs ""
                           (inStr, n + 1)
                      else (xs, n)
@@ -157,7 +181,7 @@ checkNumber [] strRPE = ([], strRPE)
 checkNumber (x:xs) strRPE = 
     -- x уже проверено и это число
     -- необходимо просмотреть строку дальше на предмет чисел
-    if ((not (isOperators x operators)) && (x /= '(') && (x /= ')') && (x /= ' ')) then do
+    if ((not (isOperators x operators)) && (x /= '(') && (x /= ')') && (x /= ' ') && not (x `elem` variables)) then do
         checkNumber xs (append x strRPE)
     else
         if (x == ' ') then 
@@ -203,24 +227,63 @@ isNotLetter :: [Char] -> Bool
 isNotLetter [] = True
 isNotLetter (x:xs) =
     --`elem` "qwertyuiopasdfghjklzxcvbnm[]{};',йцукенгшщзхъфывапролджэячсмитьбюQWERTYUIOPASDFGHJKLZXCVBNMЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ"
-    if (((((ord x) < 40) && ((ord x) > 43)) && ((ord x) < 45)) || ((ord x) > 57)) then
-        False
-    else 
+    if (x `elem` operators) || (x `elem` variables) || (x `elem` ")1234567890 ;=.") then
         isNotLetter xs
+    else 
+        False
+
+delete :: [Char] -> [Char]
+delete []     = []
+delete (x:xs) = if ' ' == x
+                   then delete xs
+                   else x:delete xs
+
+validationExpression :: [Char] -> Int -> Bool
+validationExpression [] n = if (n == 1) then True else False
+validationExpression (x:xs) n = 
+    if ((i <= -1) || (i >= 2)) then False else validationExpression inStr i
+    where 
+        (inStr, i) = if (x `elem` "()") then (xs, n)
+                     else if (isOperators x operators) then (xs, n - 1)
+                          else if (x `elem` variables) then (xs, n + 1)
+                                else (fst (checkNumber xs ""), n + 1)
+
+--i переменные
+--n длина
+--4 потому что на каждую переменную 0 пробел, 1 буква, 1 - =, 1 число
+--validationDeclaration :: [Char] -> Int -> Int -> Bool
+validationDeclaration [] i n = if (((n - 1) / i) == 3) then True else False
+validationDeclaration (x:xs) i n = if (x `elem` operators) || (x `elem` " ;") then
+                                       validationDeclaration xs i (n + 1)
+                                   else if (x `elem` variables) then
+                                            validationDeclaration xs (i + 1) (n + 1)
+                                        else validationDeclaration (fst (checkNumber ([x]++xs) "")) i (n + 1)
+
+--words :: [Char] -> [[Crar]]
+--words [] = []
+--words s = case dropFile Char.isSpase s of
+--    "" -> []
+--    s' -> w : words s''
+--          where (w, s'') break ';' s' 
 
 
 --main :: IO ()
 main = do
     input <- readFile "file.txt"
+    let (inrpe, strWithValues) = break (== ';') input
     if not (checkSequenceParentheses input 0) then
         putStrLn ("Некорректно расставлены скобки")
     else if not (isNotLetter input) then
         putStrLn ("Введен недопустимый символ")
-    else if not (validation input 0) then
-        putStrLn ("Некорректно расставлены знаки")
+    else if not (validationExpression inrpe 0) then
+        putStrLn ("Некорректно расставлены знаки в выражении")
+    else if not (validationDeclaration (delete strWithValues) 0 0) then
+        putStrLn ("Некорректный ввод в объявлении переменных")
     else do
-        let f = getReversePolishEntry input "" ""
-        --printf "%.2f\n" (calc f [])
-        putStrLn $ show $ calc f []
-          --where
-          --  f = getReversePolishEntry input "" ""
+        let rpe = getReversePolishEntry inrpe "" ""
+        putStrLn rpe
+        --putStrLn inrpe
+        putStrLn $ tail $ tail strWithValues
+        let rpefull = substitution rpe strWithValues ""
+        putStrLn rpefull
+        putStrLn $ show $ calc rpefull []
