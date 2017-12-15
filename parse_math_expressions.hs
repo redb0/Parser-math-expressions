@@ -250,7 +250,7 @@ validationExpression (x:xs) n =
 
 --i переменные
 --n длина
---4 потому что на каждую переменную 0 пробел, 1 буква, 1 - =, 1 число
+--3 потому что на каждую переменную 1 буква, 1 - =, 1 число
 --validationDeclaration :: [Char] -> Int -> Int -> Bool
 validationDeclaration [] i n = if (((n - 1) / i) == 3) then True else False
 validationDeclaration (x:xs) i n = if (x `elem` operators) || (x `elem` " ;") then
@@ -259,12 +259,21 @@ validationDeclaration (x:xs) i n = if (x `elem` operators) || (x `elem` " ;") th
                                             validationDeclaration xs (i + 1) (n + 1)
                                         else validationDeclaration (fst (checkNumber ([x]++xs) "")) i (n + 1)
 
---words :: [Char] -> [[Crar]]
---words [] = []
---words s = case dropFile Char.isSpase s of
---    "" -> []
---    s' -> w : words s''
---          where (w, s'') break ';' s' 
+
+--Проверка строки на наличие необъявленных переменных
+--Возвращает True, если строка правильная, False - в противном случае
+checkVariables [] "" False = True
+checkVariables [] i True = if (length i == 0)  then True else False
+checkVariables (x:xs) i flag = do
+    let (i', flag') = if (x `elem` variables) && (not flag) then
+                          (i ++ [x], flag)
+                      else if (x == ';') then (i, not flag)
+                           else if (x `elem` i) && flag then (delete' x i, flag)
+                                else (i, flag)
+    checkVariables xs i' flag'
+      
+delete' :: Char -> String -> String
+delete' ch = filter (/= ch)
 
 
 --main :: IO ()
@@ -279,6 +288,8 @@ main = do
         putStrLn ("Некорректно расставлены знаки в выражении")
     else if not (validationDeclaration (delete strWithValues) 0 0) then
         putStrLn ("Некорректный ввод в объявлении переменных")
+    else if not (checkVariables input "" False) then
+        putStrLn ("В выражении есть необъявленная перменная")
     else do
         let rpe = getReversePolishEntry inrpe "" ""
         putStrLn rpe
